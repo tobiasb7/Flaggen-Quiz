@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flaggen-Quiz</title>
+<style>
+  :root{--bg1:#0f2027;--bg2:#203a43;--bg3:#2c5364;--green:#2ecc71;--red:#e74c3c;--card:#ffffff10;--text:#f5f7fa}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  h1{margin:18px 0 8px;font-weight:800;letter-spacing:.5px}
+  .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .pill{background:var(--card);padding:8px 12px;border-radius:12px;border:1px solid #ffffff22}
+  .stats{display:flex;gap:10px;margin-top:8px}
+  .box{padding:8px 12px;border-radius:12px;font-weight:700}
+  .box.green{background:rgba(46,204,113,.15);border:1px solid rgba(46,204,113,.6);color:#b9ffd3}
+  .box.red{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.7);color:#ffd0cc}
+  .avg{margin-top:6px;opacity:.95}
+  .card{margin-top:18px;background:var(--card);border:1px solid #ffffff22;border-radius:18px;padding:18px;backdrop-filter:blur(6px);width:min(900px,92vw)}
+  .flag{display:flex;justify-content:center}
+  .flag img{max-width:100%;height:auto;border-radius:12px;box-shadow:0 10px 24px #0006}
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  button.choice{padding:12px;border-radius:12px;border:1px solid #ffffff33;background:#00000020;color:var(--text);font-weight:700;cursor:pointer}
+  button.choice.correct{outline:3px solid var(--green);background:rgba(46,204,113,.15)}
+  button.choice.wrong{outline:3px solid var(--red);background:rgba(231,76,60,.15)}
+  footer{margin:18px 0 22px;opacity:.8;font-size:12px}
+</style>
+</head>
+<body>
+  <h1>Flaggen-Quiz</h1>
+  <div class="top">
+    <div class="pill" id="remaining">254 von 254</div>
+  </div>
+  <div class="stats">
+    <div class="box red" id="wrongBox">Falsch: 0</div>
+    <div class="box green" id="rightBox">Richtig: 0</div>
+  </div>
+  <div class="avg" id="avg">Durchschnitt: 0%</div>
+
+  <div class="card">
+    <div class="flag"><img id="flagImg" alt="Flagge" /></div>
+    <div class="choices" id="choices"></div>
+  </div>
+  
+
+<script>
+// 254 Codes (ISO + gängige Territorien)
+const CODES = [
+"af","ax","al","dz","as","ad","ao","ai","aq","ag","ar","am","aw","au","at","az","bs","bh","bd","bb","by","be","bz","bj","bm","bt","bo","bq","ba","bw","bv","br","io","bn","bg","bf","bi","cv","kh","cm","ca","ky","cf","td","cl","cn","cx","cc","co","km","cg","cd","ck","cr","ci","hr","cu","cw","cy","cz","dk","dj","dm","do","ec","eg","sv","gq","er","ee","sz","et","fk","fo","fj","fi","fr","gf","pf","tf","ga","gm","ge","de","gh","gi","gr","gl","gd","gp","gu","gt","gg","gn","gw","gy","ht","hm","va","hn","hk","hu","is","in","id","ir","iq","ie","im","il","it","jm","jp","je","jo","kz","ke","ki","kp","kr","kw","kg","la","lv","lb","ls","lr","ly","li","lt","lu","mo","mg","mw","my","mv","ml","mt","mh","mq","mr","mu","yt","mx","fm","md","mc","mn","me","ms","ma","mz","mm","na","nr","np","nl","nc","nz","ni","ne","ng","nu","nf","mk","mp","no","om","pk","pw","ps","pa","pg","py","pe","ph","pn","pl","pt","pr","qa","re","ro","ru","rw","bl","sh","kn","lc","mf","pm","vc","ws","sm","st","sa","sn","rs","sc","sl","sg","sx","sk","si","sb","so","za","gs","ss","es","lk","sd","sr","sj","se","ch","sy","tw","tj","tz","th","tl","tg","tk","to","tt","tn","tr","tm","tc","tv","ug","ua","ae","gb","us","um","uy","uz","vu","ve","vn","vg","vi","wf","eh","ye","zm","zw",
+// extras to reach 254
+"xk","ac","cp","dg","ta"
+];
+
+const total = CODES.length; // should be 254
+let pool = [...CODES];
+let current = null;
+let right = 0;
+let wrong = 0;
+let reviewMode = false; // waiting for green confirm
+
+const dn = new Intl.DisplayNames(['de'], {type:'region'});
+const flagImg = document.getElementById('flagImg');
+const choicesEl = document.getElementById('choices');
+const remainingEl = document.getElementById('remaining');
+const rightBox = document.getElementById('rightBox');
+const wrongBox = document.getElementById('wrongBox');
+const avgEl = document.getElementById('avg');
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function updateTop(){
+  remainingEl.textContent = `${pool.length} von ${total}`;
+  rightBox.textContent = `Richtig: ${right}`;
+  wrongBox.textContent = `Falsch: ${wrong}`;
+  const attempts = right+wrong;
+  const pct = attempts? Math.round((right/attempts)*100):0;
+  avgEl.textContent = `Durchschnitt: ${pct}%`;
+}
+
+function next(){
+  if(pool.length===0){ // reset after all done
+    pool=[...CODES]; right=0; wrong=0; reviewMode=false; updateTop();
+  }
+  current = pool[Math.floor(Math.random()*pool.length)];
+  flagImg.src = `https://flagcdn.com/w640/${current}.png`;
+  makeChoices();
+  updateTop();
+}
+
+function makeChoices(){
+  choicesEl.innerHTML='';
+  const opts = new Set([current]);
+  while(opts.size<4){opts.add(CODES[Math.floor(Math.random()*CODES.length)])}
+  const arr = shuffle([...opts]);
+  arr.forEach(code=>{
+    const b=document.createElement('button');
+    b.className='choice';
+    b.textContent = dn.of(code.toUpperCase()) || code.toUpperCase();
+    b.onclick=()=>select(b,code);
+    choicesEl.appendChild(b);
+  });
+}
+
+function select(btn,code){
+  if(reviewMode){
+    // only allow clicking the correct one to continue, no score change
+    if(code===current){
+      reviewMode=false;
+      // remove from pool once confirmed
+      const idx=pool.indexOf(current);
+      if(idx>-1) pool.splice(idx,1);
+      next();
+    }
+    return;
+  }
+
+  const buttons=[...document.querySelectorAll('button.choice')];
+  
+
+  if(code===current){
+    btn.classList.add('correct');
+    right++;
+    const idx=pool.indexOf(current);
+    if(idx>-1) pool.splice(idx,1);
+    setTimeout(()=>{next();},450);
+  }else{
+    btn.classList.add('wrong');
+    const correctBtn = buttons.find(b=> (dn.of(current.toUpperCase())||current.toUpperCase())===b.textContent);
+    if(correctBtn) correctBtn.classList.add('correct');
+    wrong++;
+    reviewMode=true; // wait for green confirm, but no extra point
+  }
+  updateTop();
+}
+
+updateTop();
+next();
+</script>
+</body>
+</html>
